@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>SteelModel Lite</title>
+  <style>
+    body { margin: 0; font-family: Arial, sans-serif; }
+    #ui { position: absolute; top: 10px; left: 10px; background: rgba(255,255,255,0.9);
+         padding: 10px; border-radius:6px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+    input[type="number"] { width: 80px; }
+    button { margin-top: 6px; }
+    canvas { display:block; }
+  </style>
+</head>
+<body>
+  <div id="ui">
+    <div><strong>Parametric Beam</strong></div>
+    <div>Profile:
+      <select id="profile">
+        <option value="I200">I200</option>
+        <option value="I300">I300</option>
+        <option value="C150">C150</option>
+      </select>
+    </div>
+    <div>Length (mm): <input id="length" type="number" value="4000"></div>
+    <div>Qty: <input id="qty" type="number" value="1"></div>
+    <button id="update">Update</button>
+    <button id="export">Export BOM (CSV)</button>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.159.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.159.0/examples/js/controls/OrbitControls.js"></script>
+  <script>
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf0f0f0);
+    const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 1, 10000);
+    camera.position.set(0, 400, 1000);
+
+    const renderer = new THREE.WebGLRenderer({antialias: true});
+    renderer.setSize(innerWidth, innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.target.set(0,100,0);
+
+    const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
+    hemi.position.set(0, 400, 0);
+    scene.add(hemi);
+    const dir = new THREE.DirectionalLight(0xffffff, 0.6);
+    dir.position.set(300, 700, 500);
+    scene.add(dir);
+
+    const grid = new THREE.GridHelper(2000, 40, 0x888888, 0xcccccc);
+    scene.add(grid);
+
+    const beamGroup = new THREE.Group();
+    scene.add(beamGroup);
+
+    const material = new THREE.MeshStandardMaterial({metalness:0.6, roughness:0.4});
+
+    function buildBeam(profile, length) {
+      while(beamGroup.children.length) beamGroup.remove(beamGroup.children[0]);
+
+      if(profile.startsWith('I')) {
+        const web = new THREE.BoxGeometry(20, length, 20);
+        const top = new THREE.BoxGeometry(120, 20, 20);
+        const bottom = new THREE.BoxGeometry(120, 20, 20);
+
+        const webM = new THREE.Mesh(web, material);
+        webM.position.set(0, length/2, 0);
+
+        const topM = new THREE.Mesh(top, material);
+        topM.position.set(0, length + 10, 0);
+
+        const botM = new THREE.Mesh(bottom, material);
+        botM.position.set(0, 10, 0);
+
+        beamGroup.add(webM, topM, botM);
+      } else if(profile.startsWith('C')) {
+        const c = new THREE.BoxGeometry(length, 80, 30);
+        const cm = new THREE.Mesh(c, material);
+        cm.position.set(0, 40, 0);
+        beamGroup.add(cm);
+      } else {
+        const b = new THREE.BoxGeometry(length, 50, 50);
+        const bm = new THREE.Mesh(b, material);
+        bm.position.set(0,25,0);
+        beamGroup.add(bm);
+      }
+
+      beamGroup.position.set(0, -20, 0);
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    document.getElementById('update').onclick = () => {
+      const profile = document.getElementById('profile').value;
+      const length = Number(document.getElementById('length').value) || 2000;
+      buildBeam(profile, length);
+      controls.reset();
+    };
+
+    document.getElementById('export').onclick = () => {
+      const profile = document.getElementById('profile').value;
+      const length = Number(document.getElementById('length').value) || 2000;
+      const qty = Number(document.getElementById('qty').value) || 1;
+
+      const areas = {I200:0.015, I300:0.024, C150:0.010};
+      const area = areas[profile] || 0.01;
+      const weightKg = area * (length/1000) * 7850 * qty;
+
+      const csv = `profile,length_mm,qty,weight_kg\n${profile},${length},${qty},${weightKg.toFixed(2)}\n`;
+      const blob = new Blob([csv], {type:'text/csv'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'bom.csv'; a.click();
+      URL.revokeObjectURL(url);
+    };
+
+    buildBeam('I200', 4000);
+  </script>
+</body>
+</html>
